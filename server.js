@@ -1,3 +1,4 @@
+// backend/server.js
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -9,10 +10,11 @@ app.use(express.json());
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// Cache mémoire très simple : régénère une seule fois par jour/session.
+// Cache mémoire distinct pour le matin et le soir
 let cacheBriefMatin = null;
 let cacheBriefSoir = null;
-let cacheDate = null;
+let cacheDateMatin = null;
+let cacheDateSoir = null;
 
 function estAujourdhui(date) {
   const now = new Date();
@@ -24,25 +26,34 @@ function estAujourdhui(date) {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/brief-matin', async (req, res) => {
   try {
-    if (cacheBriefMatin && estAujourdhui(cacheDate)) {
+    if (cacheBriefMatin && estAujourdhui(cacheDateMatin)) {
+      console.log("=== [Cache Matin] Données servies depuis la mémoire ===");
       return res.json(cacheBriefMatin);
     }
 
+    console.log("=== [Cache Matin] Génération via Claude avec recherche Web... ===");
+
     const prompt = `Tu es le moteur éditorial de l'app "Synthèse". Génère le brief du matin
-au format JSON STRICT (rien d'autre que le JSON, pas de markdown), avec :
+au format JSON STRICT. Tu ne dois TOUT SIMPLEMENT PAS écrire de phrases d'introduction ou de conclusion. Renvoie UNIQUEMENT le bloc JSON, sans balises markdown de code.
+
+Voici la structure attendue :
 {
-  "citation": { "text": "...", "author": "..." },
+  "citation": { "text": "La citation ici", "author": "L'auteur" },
   "actus": [
     {
-      "titre": "...",
-      "impactChoc": "phrase choc résumant l'impact mondial",
-      "quoi": "...", "pourquoi": "...", "etApres": "...",
-      "analyseApprofondie": "3-4 phrases d'analyse de fond",
-      "visionEuropeenne": "...", "visionAmericaine": "...", "visionAsiatique": "..."
+      "titre": "Titre de l'actu",
+      "impactChoc": "Une phrase choc résumant l'impact mondial",
+      "quoi": "Explications factuelles du quoi", 
+      "pourquoi": "Explications du pourquoi", 
+      "etApres": "Perspectives futures",
+      "analyseApprofondie": "3-4 sentences d'analyse de fond",
+      "visionEuropeenne": "Position ou impact en Europe", 
+      "visionAmericaine": "Position ou impact aux USA", 
+      "visionAsiatique": "Position ou impact en Asie"
     }
-  ]  // exactement 3 actus majeures et vérifiées du jour, factuelles
+  ]
 }
-Utilise la recherche web pour te baser sur l'actualité réelle du jour.`;
+Génère exactement 3 actualités majeures et vérifiées du jour en utilisant ton outil de recherche web.`;
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -53,7 +64,7 @@ Utilise la recherche web pour te baser sur l'actualité réelle du jour.`;
 
     const texte = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
     
-    // Extraction chirurgicale du JSON (cherche la première { et la dernière })
+    // Isolation chirurgicale du JSON
     const debutJson = texte.indexOf('{');
     const finJson = texte.lastIndexOf('}');
 
@@ -65,7 +76,7 @@ Utilise la recherche web pour te baser sur l'actualité réelle du jour.`;
     const json = JSON.parse(jsonPur);
 
     cacheBriefMatin = json;
-    cacheDate = new Date();
+    cacheDateMatin = new Date();
     res.json(json);
   } catch (err) {
     console.error(err);
@@ -78,30 +89,44 @@ Utilise la recherche web pour te baser sur l'actualité réelle du jour.`;
 // ─────────────────────────────────────────────────────────────
 app.get('/api/brief-soir', async (req, res) => {
   try {
-    if (cacheBriefSoir && estAujourdhui(cacheDate)) {
+    if (cacheBriefSoir && estAujourdhui(cacheDateSoir)) {
+      console.log("=== [Cache Soir] Données servies depuis la mémoire ===");
       return res.json(cacheBriefSoir);
     }
 
+    console.log("=== [Cache Soir] Génération via Claude avec recherche Web... ===");
+
+    // 0 = Dimanche, 1 = Lundi, 2 = Mardi, etc.
     const joursDiscipline = {
-      1: null, 2: 'art', 3: 'relationsInternationales',
-      4: 'sciences', 5: 'philosophie', 6: 'histoire', 0: null,
+      1: 'art', 2: 'relationsInternationales', 3: 'sciences',
+      4: 'philosophie', 5: 'histoire', 6: 'art', 0: null
     };
     const discipline = joursDiscipline[new Date().getDay()];
 
     const prompt = discipline
-      ? `Génère UNE notion de culture générale en discipline "${discipline}" pour l'app
-"Synthèse", au format JSON strict :
+      ? `Génère UNE notion de culture générale en discipline "${discipline}" pour l'app "Synthèse", au format JSON STRICT. Ne produis aucun texte en dehors du JSON. Pas de blabla, pas de balises markdown.
+
+Structure attendue :
 {
   "cultureCard": {
     "discipline": "${discipline}",
-    "titre": "...", "contenu": "30 à 50 mots maximum, percutant et imagé",
-    "glossaire": [{ "mot": "...", "definition": "15 mots max" }],
-    "quizAssocie": { "question": "...", "choix": ["...", "...", "..."], "bonneReponseIndex": 0 }
+    "titre": "Le titre de la notion", 
+    "contenu": "30 à 50 mots maximum, percutant et imagé",
+    "glossaire": [{ "mot": "Un mot technique", "definition": "15 mots max" }],
+    "quizAssocie": { 
+      "question": "La question du quiz", 
+      "choix": ["Option 1", "Option 2", "Option 3"], 
+      "bonneReponseIndex": 0 
+    }
   },
-  "bilan": ["3 à 5 puces ultra-courtes résumant les événements marquants depuis ce matin, basées sur l'actualité réelle du jour"]
-}`
-      : `Dimanche : pas de nouvelle notion. Réponds en JSON strict :
-{ "cultureCard": null, "bilan": ["3 à 5 puces résumant les événements marquants de la journée"] }`;
+  "bilan": [
+    "Première puce courte résumant un événement marquant de la journée",
+    "Deuxième puce courte",
+    "Troisième puce courte"
+  ]
+}
+Utilise la recherche web pour construire un "bilan" basé sur les vrais événements de la journée.`
+      : `Réponds en JSON strict uniquement : { "cultureCard": null, "bilan": ["3 à 5 puces résumant les événements marquants de la journée d'aujourd'hui"] }`;
 
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
@@ -112,7 +137,7 @@ app.get('/api/brief-soir', async (req, res) => {
 
     const texte = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
     
-    // Extraction chirurgicale du JSON (cherche la première { et la dernière })
+    // Isolation chirurgicale du JSON
     const debutJson = texte.indexOf('{');
     const finJson = texte.lastIndexOf('}');
 
@@ -124,6 +149,7 @@ app.get('/api/brief-soir', async (req, res) => {
     const json = JSON.parse(jsonPur);
 
     cacheBriefSoir = json;
+    cacheDateSoir = new Date();
     res.json(json);
   } catch (err) {
     console.error(err);
@@ -132,10 +158,10 @@ app.get('/api/brief-soir', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// GET /api/citation-du-jour  →  { text, author }   (utilisé par le widget)
+// GET /api/citation-du-jour  →  { text, author }
 // ─────────────────────────────────────────────────────────────
 app.get('/api/citation-du-jour', async (req, res) => {
-  if (cacheBriefMatin?.citation && estAujourdhui(cacheDate)) {
+  if (cacheBriefMatin?.citation && estAujourdhui(cacheDateMatin)) {
     return res.json(cacheBriefMatin.citation);
   }
   req.url = '/api/brief-matin';
@@ -143,7 +169,7 @@ app.get('/api/citation-du-jour', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// POST /api/tts  { text }  →  audio/mpeg (proxy ElevenLabs)
+// POST /api/tts
 // ─────────────────────────────────────────────────────────────
 app.post('/api/tts', async (req, res) => {
   try {
