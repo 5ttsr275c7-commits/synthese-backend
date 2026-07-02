@@ -1,19 +1,3 @@
-// backend/server.js
-//
-// Backend minimal à déployer (Vercel, Render, Fly.io, un VPS...) qui :
-//  1. Appelle l'API Anthropic pour générer les actus au format "pyramide"
-//  2. Sert la citation du jour et la carte Culture G du soir
-//  3. Proxifie l'API TTS (ElevenLabs) pour ne jamais exposer la clé côté app
-//
-// Installation : npm init -y && npm install express @anthropic-ai/sdk cors dotenv
-// Lancement    : node server.js
-//
-// Variables d'environnement à définir (fichier .env) :
-//   ANTHROPIC_API_KEY=sk-ant-...
-//   ELEVENLABS_API_KEY=...
-//   ELEVENLABS_VOICE_ID=...          (voix française premium de votre choix)
-//   PORT=3000
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -26,8 +10,6 @@ app.use(express.json());
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Cache mémoire très simple : régénère une seule fois par jour/session.
-// En production, remplacez par une vraie base (Postgres, Redis...) +
-// un vrai comité éditorial de validation avant mise en ligne (cf. CDCF §4.2).
 let cacheBriefMatin = null;
 let cacheBriefSoir = null;
 let cacheDate = null;
@@ -70,10 +52,17 @@ Utilise la recherche web pour te baser sur l'actualité réelle du jour.`;
     });
 
     const texte = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
-    const json = JSON.parse(texte.replace(/```json|```/g, '').trim());
+    
+    // Extraction chirurgicale du JSON (cherche la première { et la dernière })
+    const debutJson = texte.indexOf('{');
+    const finJson = texte.lastIndexOf('}');
 
-    // ⚠️ TODO PRODUCTION : ici doit intervenir votre comité de curation
-    // humaine (journalistes/éditeurs) avant publication, comme prévu au CDCF.
+    if (debutJson === -1 || finJson === -1) {
+      throw new Error("L'IA n'a pas renvoyé de structure JSON valide pour le matin.");
+    }
+
+    const jsonPur = texte.substring(debutJson, finJson + 1);
+    const json = JSON.parse(jsonPur);
 
     cacheBriefMatin = json;
     cacheDate = new Date();
@@ -122,7 +111,17 @@ app.get('/api/brief-soir', async (req, res) => {
     });
 
     const texte = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
-    const json = JSON.parse(texte.replace(/```json|```/g, '').trim());
+    
+    // Extraction chirurgicale du JSON (cherche la première { et la dernière })
+    const debutJson = texte.indexOf('{');
+    const finJson = texte.lastIndexOf('}');
+
+    if (debutJson === -1 || finJson === -1) {
+      throw new Error("L'IA n'a pas renvoyé de structure JSON valide pour le soir.");
+    }
+
+    const jsonPur = texte.substring(debutJson, finJson + 1);
+    const json = JSON.parse(jsonPur);
 
     cacheBriefSoir = json;
     res.json(json);
@@ -139,7 +138,6 @@ app.get('/api/citation-du-jour', async (req, res) => {
   if (cacheBriefMatin?.citation && estAujourdhui(cacheDate)) {
     return res.json(cacheBriefMatin.citation);
   }
-  // Déclenche la génération du brief complet si pas encore fait aujourd'hui
   req.url = '/api/brief-matin';
   app._router.handle(req, res);
 });
