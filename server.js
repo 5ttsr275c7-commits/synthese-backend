@@ -33,9 +33,20 @@ app.get('/api/brief-matin', async (req, res) => {
 
     console.log("=== [Cache Matin] Génération via Claude avec recherche Web... ===");
 
-    const prompt = `Tu es le moteur éditorial de l'app "Synthèse". Génère le brief du matin
-au format JSON STRICT. Tu ne dois TOUT SIMPLEMENT PAS écrire de phrases d'introduction ou de conclusion. Renvoie UNIQUEMENT le bloc JSON, sans balises markdown de code.
+    const dateDuJour = new Date().toLocaleDateString('fr-FR', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+});
 
+    const prompt = `Tu es le moteur éditorial de l'app "Synthèse". Nous sommes le ${dateDuJour}.
+Génère le brief du soir au format JSON STRICT.
+
+IMPORTANT : Base-toi UNIQUEMENT sur des actualités survenues dans les dernières 24 heures
+(depuis hier à la même heure jusqu'à maintenant). Si tu n'es pas certain qu'un événement
+est récent, ne le retiens pas. N'utilise pas de faits ou scores datant de plus de 24h.
+
+Tu ne dois TOUT SIMPLEMENT PAS écrire de phrases d'introduction ou de conclusion.
+Renvoie UNIQUEMENT le bloc JSON, sans balises markdown de code.`;
+    
 Voici la structure attendue :
 {
   "citation": { "text": "La citation ici", "author": "L'auteur" },
