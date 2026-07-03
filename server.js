@@ -39,14 +39,12 @@ app.get('/api/brief-matin', async (req, res) => {
 
     const prompt = `Tu es le moteur éditorial de l'app "Synthèse". Nous sommes le ${dateDuJour}.
 Génère le brief du soir au format JSON STRICT.
-
 IMPORTANT : Base-toi UNIQUEMENT sur des actualités survenues dans les dernières 24 heures
 (depuis hier à la même heure jusqu'à maintenant). Si tu n'es pas certain qu'un événement
 est récent, ne le retiens pas. N'utilise pas de faits ou scores datant de plus de 24h.
-
 Tu ne dois TOUT SIMPLEMENT PAS écrire de phrases d'introduction ou de conclusion.
-Renvoie UNIQUEMENT le bloc JSON, sans balises markdown de code.`;
-    
+Renvoie UNIQUEMENT le bloc JSON, sans balises markdown de code.
+
 Voici la structure attendue :
 {
   "citation": { "text": "La citation ici", "author": "L'auteur" },
@@ -63,7 +61,7 @@ Voici la structure attendue :
       "visionAsiatique": "Position ou impact en Asie"
     }
   ]
-}
+}`;
 Génère exactement 3 actualités majeures et vérifiées du jour en utilisant ton outil de recherche web.`;
 
     const response = await anthropic.messages.create({
