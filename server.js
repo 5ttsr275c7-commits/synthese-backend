@@ -106,17 +106,19 @@ app.get('/api/brief-soir', async (req, res) => {
     }
 
     console.log("=== [Cache Soir] Génération via Claude avec recherche Web... ===");
+// 0 = Dimanche, 1 = Lundi, 2 = Mardi, etc.
+const joursDiscipline = {
+  1: 'art', 2: 'relationsInternationales', 3: 'sciences',
+  4: 'philosophie', 5: 'histoire', 6: 'art', 0: null
+};
+const discipline = joursDiscipline[new Date().getDay()];
 
-    // 0 = Dimanche, 1 = Lundi, 2 = Mardi, etc.
-    const joursDiscipline = {
-      1: 'art', 2: 'relationsInternationales', 3: 'sciences',
-      4: 'philosophie', 5: 'histoire', 6: 'art', 0: null
-    };
-    const discipline = joursDiscipline[new Date().getDay()];
+const dateDuJour = new Date().toLocaleDateString('fr-FR', {
+  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+});
 
-    const prompt = discipline
-      ? `Génère UNE notion de culture générale en discipline "${discipline}" pour l'app "Synthèse", au format JSON STRICT. Ne produis aucun texte en dehors du JSON. Pas de blabla, pas de balises markdown.
-
+const prompt = discipline
+  ? `Nous sommes le ${dateDuJour}. Génère UNE notion de culture générale en discipline "${discipline}" pour l'app "Synthèse", au format JSON STRICT. Ne produis aucun texte en dehors du JSON. Pas de blabla, pas de balises markdown.
 Structure attendue :
 {
   "cultureCard": {
@@ -136,15 +138,15 @@ Structure attendue :
     "Troisième puce courte"
   ]
 }
-Utilise la recherche web pour construire un "bilan" basé sur les vrais événements de la journée.`
-      : `Réponds en JSON strict uniquement : { "cultureCard": null, "bilan": ["3 à 5 puces résumant les événements marquants de la journée d'aujourd'hui"] }`;
+IMPORTANT pour le "bilan" : utilise la recherche web pour trouver des événements survenus AUJOURD'HUI (${dateDuJour}) ou, à défaut, hier au plus tard. N'utilise JAMAIS un événement de plus de 24h s'il existe une actualité plus récente sur le même sujet. Si tu n'es pas certain qu'un événement date d'aujourd'hui ou d'hier, ne le retiens pas.`
+  : `Nous sommes le ${dateDuJour}. Réponds en JSON strict uniquement : { "cultureCard": null, "bilan": ["3 à 5 puces résumant les événements marquants d'aujourd'hui, ${dateDuJour}, en te basant sur des sources datées de moins de 24h"] }`;
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages: [{ role: 'user', content: prompt }],
-    });
+const response = await anthropic.messages.create({
+  model: 'claude-sonnet-4-6',
+  max_tokens: 2000,
+  tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+  messages: [{ role: 'user', content: prompt }],
+});
 
     const texte = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
     
