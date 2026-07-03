@@ -44,7 +44,6 @@ IMPORTANT : Base-toi UNIQUEMENT sur des actualités survenues dans les dernière
 est récent, ne le retiens pas. N'utilise pas de faits ou scores datant de plus de 24h.
 Tu ne dois TOUT SIMPLEMENT PAS écrire de phrases d'introduction ou de conclusion.
 Renvoie UNIQUEMENT le bloc JSON, sans balises markdown de code.
-
 Voici la structure attendue :
 {
   "citation": { "text": "La citation ici", "author": "L'auteur" },
@@ -61,7 +60,7 @@ Voici la structure attendue :
       "visionAsiatique": "Position ou impact en Asie"
     }
   ]
-}`;
+}
 Génère exactement 3 actualités majeures et vérifiées du jour en utilisant ton outil de recherche web.`;
 
     const response = await anthropic.messages.create({
